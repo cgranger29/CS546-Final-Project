@@ -8,12 +8,6 @@ import bcryptjs from "bcryptjs";
 const exportMethod = {
   async createUser(firstname, lastname, email, password, town, zipcode) {
     // Checking
-    firstname = validation.checkString(firstname, "First name").trim();
-    lastname = validation.checkString(lastname, "First name").trim();
-    firstname = validation.checkNames(firstname, "First name");
-    lastname = validation.checkNames(lastname, "Last name");
-
-    // Checking
     firstname = validation.checkString(firstname, "First name");
     lastname = validation.checkString(lastname, "Last name");
     firstname = validation.checkNames(firstname, "First name");
@@ -58,6 +52,63 @@ const exportMethod = {
     return user;
   },
 
+  // Change user information -- only generic info
+  async changeInfo(id, userInfo) {
+    id = id.toString();
+
+    // Checking stuff
+    id = validation.checkId(id);
+    userInfo = validation.isValidObject(userInfo);
+
+    const updateUser = {};
+
+    if (userInfo.firstName) {
+      updateUser.firstName = validation.checkString(
+        userInfo.firstname,
+        "First name"
+      );
+    }
+
+    if (userInfo.lastName) {
+      updateUser.lastName = validation.checkString(
+        userInfo.lastName,
+        "Last name"
+      );
+    }
+
+    if (userInfo.email) {
+      updateUser.email = validation.checkEmail(userInfo.email, "Email");
+    }
+
+    // No change password here, because change password should have its own function
+
+    // might need to do a deeper search?
+    if (userInfo.location.town && typeof userInfo.location === "object") {
+      updateUser.location.town = validation.checkString(
+        userInfo.location.town,
+        "Town"
+      );
+    }
+
+    if (userInfo.location.zipcode && typeof userInfo.location === "object") {
+      updateUser.location.zipcode = validation.checkZipcode(
+        userInfo.location.zipcode,
+        "Zipcode"
+      );
+    }
+
+    const userCollection = await users();
+    const updateInfo = await userCollection.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: updateuser }
+    );
+    if (!updateInfo) {
+      throw "Error: Update failed, could not find user with specified ID.";
+    }
+
+    return updateInfo;
+  },
+
   // Delete user
   async deleteuser(id) {
     id = id.toString();
@@ -75,56 +126,7 @@ const exportMethod = {
     return `${deletion.firstName} has been successfully deleted!`;
   },
 
-  // Change user information
-  async changeInfo(id, userInfo) {
-    id = validation.checkId(id);
-
-    if (userInfo.firstName) {
-      userInfo.firstName = validation.checkString(
-        userInfo.firstname,
-        "First name"
-      );
-    }
-
-    if (userInfo.lastName) {
-      userInfo.lastName = validation.checkString(
-        userInfo.lastName,
-        "Last name"
-      );
-    }
-
-    if (userInfo.email) {
-      userInfo.email = validation.checkEmail(userInfo.email, "Email");
-    }
-
-    if (userInfo.password) {
-    }
-
-    // might need to do a deeper search?
-    if (userInfo.location.town) {
-      userInfo.location.town = validation.checkString(
-        userInfo.location.town,
-        "Town"
-      );
-    }
-
-    if (userInfo.location.zipcode) {
-      userInfo.location.zipcode = validation.checkZipcode(
-        userInfo.location.zipcode,
-        "Zipcode"
-      );
-    }
-
-    const userCollection = await users();
-    const updateInfo = await userCollection.findOneAndUpdate({
-      _id: new ObjectId(id),
-    });
-    if (!updateInfo) {
-      throw "Error: Update failed, could not find user with specified ID.";
-    }
-
-    return updateInfo;
-  },
+  async changePassword() {},
 
   // Get user by their username
   async getUser(username) {},
@@ -143,22 +145,47 @@ const exportMethod = {
     return user;
   },
 
-  // Delete user
-  async deleteuser(id) {
+  // If they want to add a child
+  async addChild(id, firstname, lastname, age) {
     id = id.toString();
+
+    // Check ID
     id = validation.checkId(id);
 
-    const userCollection = await users();
-    const deletion = await userCollection.findOneAndDelete({
-      _id: new ObjectId(id),
-    });
+    const usersCollection = await users();
 
-    if (!deletion) {
-      throw "Could not delete user with specified ID.";
+    const newKidInfo = {
+      firstName: firstname,
+      lastName: lastname,
+      age: age,
+    };
+
+    const updateInfo = await usersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $push: { kids: newKidInfo } }
+    );
+    if (updateInfo.modifiedCount === 0) {
+      throw "Could not add child.";
     }
 
-    return `${deletion.firstName} has been successfully deleted!`;
+    return newKidInfo;
   },
+
+  // If they want to remove a child
+  async removeChild(id, name) {
+    const userCollection = await users();
+    const byeChild = await userCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $pull: { kids: { firstName: name } } }
+    );
+
+    if (byeChild.modifiedCount === 0) {
+      throw "Child could not be found or removed";
+    }
+
+    return `${byeChild.firstName} has been successfully deleted!`;
+  },
+
   // Add favorite daycare
   // When a user clicks on the heart on the daycare page, they will automatically have the daycare's id added to their favorite list
   async addFavDaycare(userId, daycareId) {
@@ -207,9 +234,6 @@ const exportMethod = {
     return favDaycare;
   },
 
-  // Get user by their username
-  async getUser(username) {},
-
   // Get favorite daycares of user
   async getFavDayCare(id) {
     id = id.toString();
@@ -253,57 +277,12 @@ const exportMethod = {
     return "Successfully deleted daycare!!";
   },
 
-  // If they want to add a child
-  async addChild(id, firstname, lastname, age) {
-    id = id.toString();
-
-    // Check ID
-    id = validation.checkId(id);
-
-    const usersCollection = await users();
-
-    const newKidInfo = {
-      firstName: firstname,
-      lastName: lastname,
-      age: age,
-    };
-
-    const updateInfo = await usersCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $push: { kids: newKidInfo } }
-    );
-    if (updateInfo.modifiedCount === 0) {
-      throw "Could not add child.";
-    }
-
-    return newKidInfo;
-  },
-
-  // If they want to remove a child
-  async removeChild(id, name) {
-    const userCollection = await users();
-    const byeChild = await userCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $pull: { kids: { firstName: name } } }
-    );
-
-    if (byeChild.modifiedCount === 0) {
-      throw "Child could not be found or removed";
-    }
-
-    return `${byeChild.firstName} has been successfully deleted!`;
-  },
-
-  // Add favorite daycare
-  async addFavDaycare() {},
-
-  async removeFavDaycare() {},
-
   // Add review
   async addReview() {},
 
   // Delete review
   async deleteReview() {},
+
   async loginUser(email, password) {
     if (!email) {
       throw new Error("Must provide an email.");
